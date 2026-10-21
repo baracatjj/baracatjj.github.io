@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Little Question</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ====== SETTINGS: change these ====== */
+  /* Your email lives in the <script> at the bottom (TO_EMAIL). */
+
+  :root {
+    --bg: #fff5f3;
+    --card: #ffffff;
+    --ink: #3a2a2e;
+    --muted: #8a7276;
+    --accent: #e0546b;
+    --accent-dark: #c43d55;
+    --soft: #fde3e6;
+    --line: #f2d4d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(circle at 20% 10%, #ffe4e8 0, transparent 45%),
+                radial-gradient(circle at 85% 90%, #ffeadb 0, transparent 45%),
+                var(--bg);
+    color: var(--ink);
+    font-family: Inter, system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+  .card {
+    background: var(--card);
+    width: 100%;
+    max-width: 460px;
+    border-radius: 24px;
+    padding: 40px 28px;
+    text-align: center;
+    box-shadow: 0 20px 60px -20px rgba(196, 61, 85, .35);
+    position: relative;
+  }
+  .emoji { font-size: 56px; line-height: 1; margin-bottom: 12px; }
+  h1 {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(28px, 7vw, 36px);
+    margin: 0 0 8px;
+    line-height: 1.15;
+  }
+  p { color: var(--muted); margin: 0 0 28px; line-height: 1.5; }
+  .buttons {
+    display: flex; gap: 14px; justify-content: center; align-items: center;
+    min-height: 60px; position: relative;
+  }
+  button {
+    font: 600 17px Inter, sans-serif;
+    border: 0; border-radius: 999px;
+    padding: 14px 32px;
+    cursor: pointer;
+    transition: transform .15s ease, background .15s ease;
+  }
+  .yes { background: var(--accent); color: #fff; }
+  .yes:hover { background: var(--accent-dark); transform: scale(1.05); }
+  .no { background: var(--soft); color: var(--accent-dark); }
+  .no.runaway { position: fixed; z-index: 10; transition: left .2s ease, top .2s ease; }
+  .step { display: none; animation: fade .35s ease; }
+  .step.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  form { text-align: left; display: grid; gap: 16px; }
+  label { font-weight: 600; font-size: 14px; display: grid; gap: 6px; }
+  input, textarea {
+    font: 16px Inter, sans-serif;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    background: #fffafa;
+    color: var(--ink);
+    width: 100%;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 70px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 380px) { .row { grid-template-columns: 1fr; } }
+  form .yes { width: 100%; margin-top: 4px; }
+  .error { color: var(--accent-dark); font-size: 14px; min-height: 1em; margin: 0; text-align: center; }
+  .heart {
+    position: fixed; top: -40px; pointer-events: none; font-size: 24px;
+    animation: fall linear forwards;
+  }
+  @keyframes fall { to { transform: translateY(110vh) rotate(360deg); opacity: .2; } }
+</style>
+</head>
+<body>
+  <main class="card">
+
+    <!-- Step 1: the question -->
+    <section class="step active" id="step-ask">
+      <div class="emoji">🌹</div>
+      <h1>Leidy, will you go on a date with me?</h1>
+      <p>I've been wanting to ask you this for a while…</p>
+      <div class="buttons">
+        <button class="yes" id="yesBtn">Yes!</button>
+        <button class="no" id="noBtn">No</button>
+      </div>
+    </section>
+
+    <!-- Step 2: pick a date & time -->
+    <section class="step" id="step-pick">
+      <div class="emoji">🥰</div>
+      <h1>Yay, Leidy! When works for you?</h1>
+      <p>Pick a day and time and I'll plan the rest.</p>
+      <form id="dateForm">
+        <div class="row">
+          <label>Date
+            <input type="date" name="date" id="dateInput" required>
+          </label>
+          <label>Time
+            <input type="time" name="time" required value="19:00">
+          </label>
+        </div>
+        <label>Anything I should know? <span style="font-weight:400;color:var(--muted)">(optional)</span>
+          <textarea name="note" placeholder="Favorite food, ideas, etc."></textarea>
+        </label>
+        <button type="submit" class="yes" id="sendBtn">It's a date 💌</button>
+        <p class="error" id="error"></p>
+      </form>
+    </section>
+
+    <!-- Step 3: done -->
+    <section class="step" id="step-done">
+      <div class="emoji">💖</div>
+      <h1>It's a date!</h1>
+      <p id="summary">Can't wait to see you.</p>
+    </section>
+
+  </main>
+
+<script>
+  // ====== Where the answer gets emailed ======
+  const TO_EMAIL = "baracatjj@gmail.com";
+  const NAME = "Leidy";
+
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => {
+    document.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
+    $(id).classList.add("active");
+  };
+
+  // Don't allow dates in the past
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  $("dateInput").min = today.toISOString().slice(0, 10);
+
+  // The "No" button runs away
+  const noBtn = $("noBtn");
+  const noTexts = ["No", "Are you sure?", "Really?", "Think again!", "Pretty please?", "🥺"];
+  let dodges = 0;
+  function dodge(e) {
+    if (e) e.preventDefault();
+    noBtn.classList.add("runaway");
+    const pad = 16;
+    const maxX = window.innerWidth - noBtn.offsetWidth - pad;
+    const maxY = window.innerHeight - noBtn.offsetHeight - pad;
+    noBtn.style.left = Math.max(pad, Math.random() * maxX) + "px";
+    noBtn.style.top = Math.max(pad, Math.random() * maxY) + "px";
+    dodges++;
+    noBtn.textContent = noTexts[Math.min(dodges, noTexts.length - 1)];
+    const yes = $("yesBtn");
+    yes.style.transform = `scale(${Math.min(1 + dodges * 0.12, 1.8)})`;
+  }
+  noBtn.addEventListener("mouseenter", dodge);
+  noBtn.addEventListener("touchstart", dodge, { passive: false });
+  noBtn.addEventListener("click", dodge);
+
+  $("yesBtn").addEventListener("click", () => {
+    noBtn.style.display = "none";
+    hearts(25);
+    show("step-pick");
+  });
+
+  // Send the answer by email (via FormSubmit.co — no server needed)
+  $("dateForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.name = NAME;
+    const pretty = new Date(`${data.date}T${data.time}`).toLocaleString(undefined, {
+      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+
+    const btn = $("sendBtn");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    $("error").textContent = "";
+
+    try {
+      const res = await fetch(`https://formsubmit.co/ajax/${TO_EMAIL}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({
+          _subject: `💌 ${data.name} said YES to a date!`,
+          _template: "table",
+          Name: data.name,
+          When: pretty,
+          Date: data.date,
+          Time: data.time,
+          Note: data.note || "(none)"
+        })
+      });
+      if (!res.ok) throw new Error("Request failed");
+      $("summary").textContent = `See you ${pretty}, ${data.name}. Can't wait! 💕`;
+      hearts(40);
+      show("step-done");
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "It's a date 💌";
+      $("error").textContent = "Hmm, that didn't send. Please try again!";
+    }
+  });
+
+  function hearts(n) {
+    const icons = ["💖", "💕", "💗", "🌹", "✨"];
+    for (let i = 0; i < n; i++) {
+      const h = document.createElement("div");
+      h.className = "heart";
+      h.textContent = icons[i % icons.length];
+      h.style.left = Math.random() * 100 + "vw";
+      h.style.animationDuration = 2.5 + Math.random() * 2.5 + "s";
+      h.style.animationDelay = Math.random() * 0.8 + "s";
+      document.body.appendChild(h);
+      setTimeout(() => h.remove(), 6000);
+    }
+  }
+</script>
+</body>
+</html>
