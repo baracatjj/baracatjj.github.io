@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Una Preguntita...</title>
+<title>Una preguntita...</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -66,6 +66,9 @@
   .yes { background: var(--accent); color: #fff; }
   .yes:hover { background: var(--accent-dark); transform: scale(1.05); }
   .no { background: var(--soft); color: var(--accent-dark); }
+  .choices { display: grid; gap: 12px; margin-top: 24px; }
+  .choice { background: var(--soft); color: var(--accent-dark); width: 100%; }
+  .choice:hover { background: var(--accent); color: #fff; transform: scale(1.03); }
   .no.runaway { position: fixed; z-index: 10; transition: left .2s ease, top .2s ease; }
   .step { display: none; animation: fade .35s ease; }
   .step.active { display: block; }
@@ -86,6 +89,22 @@
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 380px) { .row { grid-template-columns: 1fr; } }
   form .yes { width: 100%; margin-top: 4px; }
+  .field-label { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .cal { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; background: #fffafa; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cal-head strong { font-family: Fraunces, Georgia, serif; font-size: 17px; }
+  .cal-nav { background: none; color: var(--accent-dark); padding: 6px 12px; font-size: 18px; }
+  .cal-nav:disabled { opacity: .25; cursor: default; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  .cal-dow { font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 0; }
+  .cal-day {
+    font: 500 14px Inter, sans-serif; padding: 0; aspect-ratio: 1; border-radius: 50%;
+    background: none; color: var(--ink);
+  }
+  .cal-day:hover:not(:disabled) { background: var(--soft); }
+  .cal-day:disabled { color: #d6c6c9; cursor: not-allowed; }
+  .cal-day.blocked { text-decoration: line-through; }
+  .cal-day.selected { background: var(--accent); color: #fff; }
   .error { color: var(--accent-dark); font-size: 14px; min-height: 1em; margin: 0; text-align: center; }
   .heart {
     position: fixed; top: -40px; pointer-events: none; font-size: 24px;
@@ -103,25 +122,35 @@
       <h1>Leidy, will you go on a date with me?</h1>
       <p>Since planning has been a little complicated… I had to get creative</p>
       <div class="buttons">
-        <button class="yes" id="yesBtn">Si!</button>
+        <button class="yes" id="yesBtn">Yes!</button>
         <button class="no" id="noBtn">No</button>
       </div>
     </section>
 
-    <!-- Step 2: pick a date & time -->
+    <!-- Step 2: location -->
+    <section class="step" id="step-where">
+      <div class="emoji">📍</div>
+      <h1>Would you prefer the date to be in?</h1>
+      <div class="choices">
+        <button class="choice" data-location="Richmond">Richmond</button>
+        <button class="choice" data-location="Down to come to Nova :)">Down to come to Nova :)</button>
+      </div>
+    </section>
+
+    <!-- Step 3: pick a date & time -->
     <section class="step" id="step-pick">
       <div class="emoji">🥰</div>
       <h1>Yay, Leidy! When works for you?</h1>
       <p>Pick a day and time and I'll plan the rest.</p>
       <form id="dateForm">
-        <div class="row">
-          <label>Date
-            <input type="date" name="date" id="dateInput" required>
-          </label>
-          <label>Time
-            <input type="time" name="time" required value="19:00">
-          </label>
+        <div>
+          <div class="field-label">Date</div>
+          <div class="cal" id="cal"></div>
+          <input type="hidden" name="date" id="dateInput">
         </div>
+        <label>Time
+          <input type="time" name="time" required value="19:00">
+        </label>
         <label>Anything I should know? <span style="font-weight:400;color:var(--muted)">(optional)</span>
           <textarea name="note" placeholder="Favorite food, ideas, etc."></textarea>
         </label>
@@ -130,7 +159,7 @@
       </form>
     </section>
 
-    <!-- Step 3: done -->
+    <!-- Step 4: done -->
     <section class="step" id="step-done">
       <div class="emoji">💖</div>
       <h1>It's a date!</h1>
@@ -144,16 +173,65 @@
   const TO_EMAIL = "baracatjj@gmail.com";
   const NAME = "Leidy";
 
+  // ====== Dates Leidy can't pick ======
+  // Specific days, written as "YYYY-MM-DD"
+  const BLOCKED_DATES = [
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-21",
+  ];
+  // Whole weekdays to block: 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  const BLOCKED_WEEKDAYS = [];
+  // How many months ahead she can pick from
+  const MONTHS_AHEAD = 3;
+
   const $ = (id) => document.getElementById(id);
   const show = (id) => {
     document.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
     $(id).classList.add("active");
   };
 
-  // Don't allow dates in the past
-  const today = new Date();
-  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-  $("dateInput").min = today.toISOString().slice(0, 10);
+  // Calendar (past and blocked dates are greyed out)
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const now = new Date();
+  const todayIso = iso(now);
+  const firstMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() + MONTHS_AHEAD - 1, 1);
+  let viewMonth = new Date(firstMonth);
+
+  function isBlocked(d) {
+    return BLOCKED_DATES.includes(iso(d)) || BLOCKED_WEEKDAYS.includes(d.getDay());
+  }
+
+  function renderCal() {
+    const y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+    const title = viewMonth.toLocaleString(undefined, { month: "long", year: "numeric" });
+    let html = `<div class="cal-head">
+      <button type="button" class="cal-nav" id="calPrev" aria-label="Previous month" ${viewMonth <= firstMonth ? "disabled" : ""}>‹</button>
+      <strong>${title}</strong>
+      <button type="button" class="cal-nav" id="calNext" aria-label="Next month" ${viewMonth >= lastMonth ? "disabled" : ""}>›</button>
+    </div><div class="cal-grid">`;
+    ["S","M","T","W","T","F","S"].forEach(d => html += `<div class="cal-dow">${d}</div>`);
+    const startDow = new Date(y, m, 1).getDay();
+    for (let i = 0; i < startDow; i++) html += `<div></div>`;
+    const days = new Date(y, m + 1, 0).getDate();
+    for (let day = 1; day <= days; day++) {
+      const d = new Date(y, m, day), key = iso(d);
+      const past = key < todayIso, blocked = isBlocked(d);
+      const cls = ["cal-day", blocked && !past ? "blocked" : "", $("dateInput").value === key ? "selected" : ""].join(" ");
+      html += `<button type="button" class="${cls}" data-date="${key}" ${past || blocked ? "disabled" : ""}>${day}</button>`;
+    }
+    $("cal").innerHTML = html + `</div>`;
+    $("calPrev").onclick = () => { viewMonth.setMonth(viewMonth.getMonth() - 1); renderCal(); };
+    $("calNext").onclick = () => { viewMonth.setMonth(viewMonth.getMonth() + 1); renderCal(); };
+    $("cal").querySelectorAll(".cal-day:not(:disabled)").forEach(b => b.onclick = () => {
+      $("dateInput").value = b.dataset.date;
+      $("error").textContent = "";
+      renderCal();
+    });
+  }
+  renderCal();
 
   // The "No" button runs away
   const noBtn = $("noBtn");
@@ -179,14 +257,21 @@
   $("yesBtn").addEventListener("click", () => {
     noBtn.style.display = "none";
     hearts(25);
-    show("step-pick");
+    show("step-where");
   });
+
+  let chosenLocation = "";
+  document.querySelectorAll(".choice").forEach(b => b.addEventListener("click", () => {
+    chosenLocation = b.dataset.location;
+    show("step-pick");
+  }));
 
   // Send the answer by email (via FormSubmit.co — no server needed)
   $("dateForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
     data.name = NAME;
+    if (!data.date) { $("error").textContent = "Pick a day on the calendar first 📅"; return; }
     const pretty = new Date(`${data.date}T${data.time}`).toLocaleString(undefined, {
       weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit"
     });
@@ -205,13 +290,15 @@
           _template: "table",
           Name: data.name,
           When: pretty,
+          Location: chosenLocation,
           Date: data.date,
           Time: data.time,
           Note: data.note || "(none)"
         })
       });
       if (!res.ok) throw new Error("Request failed");
-      $("summary").textContent = `See you ${pretty}, ${data.name}. Can't wait! 💕`;
+      const where = chosenLocation === "Richmond" ? " in Richmond" : " in Nova";
+      $("summary").textContent = `See you ${pretty}${where}, ${data.name}. Can't wait! 💕`;
       hearts(40);
       show("step-done");
     } catch (err) {
